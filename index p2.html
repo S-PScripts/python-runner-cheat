@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Progress Code Generator – Range Control</title>
+
+<style>
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+    background: #f5f5f5;
+}
+.container {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+h1 {
+    color: #e53e3e;
+}
+.warning {
+    background: #fff5f5;
+    border-left: 4px solid #e53e3e;
+    padding: 15px;
+    margin: 20px 0;
+}
+label {
+    display: block;
+    margin-top: 15px;
+    font-weight: 600;
+}
+input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #e2e8f0;
+    border-radius: 5px;
+    font-size: 16px;
+}
+button {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    margin: 10px 10px 0 0;
+}
+button:hover {
+    background: #5a6cdb;
+}
+.code-output {
+    background: #1a202c;
+    color: #e2e8f0;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: monospace;
+    margin-top: 20px;
+
+    /* 🔑 THIS IS THE FIX */
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin: 20px 0;
+}
+.stat-box {
+    background: #f7fafc;
+    padding: 15px;
+    border-radius: 5px;
+    text-align: center;
+}
+.stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #667eea;
+}
+.stat-label {
+    font-size: 12px;
+    color: #718096;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>🔓 Progress Code Generator</h1>
+<p style="color:#718096">Client-side encoding vulnerability demo</p>
+
+<div class="warning">
+<strong>⚠️ Security Demo</strong><br>
+Progress is fully forgeable because encoding happens entirely on the client.
+</div>
+
+<label>Total Tasks</label>
+<input type="number" id="taskCount" value="1209" min="1">
+
+<label>Range Start (0-based)</label>
+<input type="number" id="rangeStart" value="0" min="0">
+
+<label>Range End (inclusive)</label>
+<input type="number" id="rangeEnd" value="100" min="0">
+
+<label>Number of Codes to Generate</label>
+<input type="number" id="codeCount" value="10" min="1" max="1000">
+
+<div class="stats">
+    <div class="stat-box">
+        <div class="stat-value" id="notAttemptedCount">0</div>
+        <div class="stat-label">Not Attempted</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value" id="incorrectCount">0</div>
+        <div class="stat-label">Incorrect</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value" id="correct1Count">0</div>
+        <div class="stat-label">Correct Once</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value" id="correct2Count">0</div>
+        <div class="stat-label">Correct 2+</div>
+    </div>
+</div>
+
+<!-- --- RANGE: Single Code --- -->
+<button onclick="generateRange(1)">Generate Range (Correct Once)</button>
+<button onclick="generateRange(2)">Generate Range (Correct 2+)</button>
+
+<!-- --- RANGE: Multiple Codes --- -->
+<button onclick="generateMultipleRangeCodes(1)">Generate Multiple (Range, Correct Once)</button>
+<button onclick="generateMultipleRangeCodes(2)">Generate Multiple (Range, Correct 2+)</button>
+
+<!-- --- ALL TASKS: Single Code --- -->
+<button onclick="generateAll(1)">Generate All Correct Once</button>
+<button onclick="generateAll(2)">Generate All Correct 2+</button>
+
+<!-- --- ALL TASKS: Multiple Codes --- -->
+<button onclick="generateMultipleAllCodes(1)">Generate Multiple (All, Correct Once)</button>
+<button onclick="generateMultipleAllCodes(2)">Generate Multiple (All, Correct 2+)</button>
+
+<!-- --- RANDOM --- -->
+<button onclick="generateRandom()">Generate Random</button>
+
+
+<div class="code-output" id="output">Click a button to generate a code…</div>
+
+</div>
+
+<script>
+let progressData = {};
+
+// ---------- ENCODING ----------
+function generateSalt() {
+    return crypto.getRandomValues(new Uint8Array(4));
+}
+
+function xorEncrypt(data, salt) {
+    const out = new Uint8Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+        out[i] = data[i] ^ salt[i % salt.length];
+    }
+    return out;
+}
+
+function encodeProgress() {
+    const total = Object.keys(progressData).length;
+    const bytes = Math.ceil(total / 4);
+    const arr = new Uint8Array(bytes);
+
+    for (let i = 0; i < total; i++) {
+        const s = progressData[i] || 0;
+        const mapped = s === -1 ? 1 : s === 1 ? 2 : s === 2 ? 3 : 0;
+        const b = Math.floor(i / 4);
+        const o = (i % 4) * 2;
+        arr[b] |= mapped << o;
+    }
+
+    const salt = generateSalt();
+    const enc = xorEncrypt(arr, salt);
+    const combined = new Uint8Array([...salt, ...enc]);
+
+    let bin = '';
+    combined.forEach(b => bin += String.fromCharCode(b));
+
+    return 'P2.' + btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+
+// ---------- STATS ----------
+function updateStats(taskCount) {
+    let na=0, inc=0, c1=0, c2=0;
+    for (let i = 0; i < taskCount; i++) {
+        const s = progressData[i] || 0;
+        if (s === 0) na++;
+        else if (s === -1) inc++;
+        else if (s === 1) c1++;
+        else if (s === 2) c2++;
+    }
+    notAttemptedCount.textContent = na;
+    incorrectCount.textContent = inc;
+    correct1Count.textContent = c1;
+    correct2Count.textContent = c2;
+}
+
+// ---------- GENERATORS ----------
+function generateRange(level) {
+    const total = +taskCount.value;
+    const start = +rangeStart.value;
+    const end = +rangeEnd.value;
+
+    progressData = {};
+    for (let i = 0; i < total; i++) {
+        progressData[i] = (i >= start && i <= end) ? level : 0;
+    }
+
+    output.textContent = encodeProgress();
+    updateStats(total);
+}
+
+function generateAll(level) {
+    const total = +taskCount.value;
+    progressData = {};
+    for (let i = 0; i < total; i++) progressData[i] = level;
+    output.textContent = encodeProgress();
+    updateStats(total);
+}
+
+function generateRandom() {
+    const total = +taskCount.value;
+    progressData = {};
+    for (let i = 0; i < total; i++) {
+        progressData[i] = Math.floor(Math.random() * 4) - 1;
+    }
+    output.textContent = encodeProgress();
+    updateStats(total);
+}
+
+function generateMultipleRangeCodes(level) {
+    const total = +taskCount.value;
+    const start = +rangeStart.value;
+    const end = +rangeEnd.value;
+    const count = +codeCount.value;
+
+    const codes = [];
+
+    for (let c = 0; c < count; c++) {
+        progressData = {};
+
+        for (let i = 0; i < total; i++) {
+            progressData[i] = (i >= start && i <= end) ? level : 0;
+        }
+
+        codes.push(encodeProgress());
+    }
+
+    output.textContent = codes.join("\n\n"); // spacing between codes
+    updateStats(total);
+}
+
+function generateMultipleAllCodes(level) {
+    const total = +taskCount.value;
+    const count = +codeCount.value;
+    const codes = [];
+
+    for (let c = 0; c < count; c++) {
+        progressData = {};
+
+        for (let i = 0; i < total; i++) {
+            progressData[i] = level; // 1 = correct once
+        }
+
+        codes.push(encodeProgress());
+    }
+
+    output.textContent = codes.join("\n\n");
+    updateStats(total);
+}
+
+updateStats(+taskCount.value);
+</script>
+</body>
+</html>
